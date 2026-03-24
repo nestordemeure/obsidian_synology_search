@@ -1,0 +1,9 @@
+{
+  "id": "synology-link",
+  "name": "Synology Link",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Search and link to files on your Synology NAS directly from Obsidian.",
+  "author": "",
+  "isDesktopOnly": false
+}
