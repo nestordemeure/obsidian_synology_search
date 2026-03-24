@@ -34,16 +34,24 @@ export class SynologySearchModal extends SuggestModal<FileResult> {
     }
   }
 
-  getSuggestions(query: string): Promise<FileResult[]> {
+  getSuggestions(query: string): FileResult[] | Promise<FileResult[]> {
     if (!query || query.length < 2) {
-      return Promise.resolve(this.results);
+      this.results = [];
+      return [];
+    }
+
+    // Show "Searching..." while debouncing / fetching
+    this.emptyStateText = "Searching...";
+    const emptyEl = this.resultContainerEl.querySelector(".suggestion-empty");
+    if (emptyEl) {
+      emptyEl.textContent = "Searching...";
+    }
+
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
     }
 
     return new Promise<FileResult[]>((resolve) => {
-      if (this.debounceTimer) {
-        clearTimeout(this.debounceTimer);
-      }
-
       this.debounceTimer = setTimeout(async () => {
         // Cancel any in-progress search
         if (this.abortController) {
@@ -62,6 +70,7 @@ export class SynologySearchModal extends SuggestModal<FileResult> {
           .filter((e) => e.length > 0);
 
         if (folders.length === 0) {
+          this.emptyStateText = "No search folders configured";
           resolve([]);
           return;
         }
@@ -74,6 +83,9 @@ export class SynologySearchModal extends SuggestModal<FileResult> {
             this.abortController.signal
           );
           this.results = results;
+          if (results.length === 0) {
+            this.emptyStateText = "No files found";
+          }
           resolve(results);
         } catch {
           // Return previous results on error (search was likely cancelled)

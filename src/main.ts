@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Menu, Plugin } from "obsidian";
+import { Editor, MarkdownView, Menu, Notice, Plugin } from "obsidian";
 import {
   SynologyLinkSettingTab,
   DEFAULT_SETTINGS,
@@ -6,7 +6,7 @@ import {
 } from "./settings";
 import { SynologyApi } from "./synology-api";
 import { SynologySearchModal } from "./search-modal";
-import { SynologyLinkChild } from "./link-handler";
+import { SynologyLinkChild, buildLivePreviewExtension } from "./link-handler";
 
 export default class SynologyLinkPlugin extends Plugin {
   settings: SynologyLinkSettings = DEFAULT_SETTINGS;
@@ -44,17 +44,23 @@ export default class SynologyLinkPlugin extends Plugin {
       )
     );
 
-    // Register markdown post-processor for synology:// links
+    // Reading View: post-processor for synology:// links
     this.registerMarkdownPostProcessor((el, ctx) => {
       const links = el.querySelectorAll('a[href^="synology://"]');
       links.forEach((link) => {
         const child = new SynologyLinkChild(
           link as HTMLElement,
-          this.synologyApi
+          this.synologyApi,
+          () => this.settings
         );
         ctx.addChild(child);
       });
     });
+
+    // Live Preview: editor extension for synology:// links
+    this.registerEditorExtension(
+      buildLivePreviewExtension(this.synologyApi, () => this.settings)
+    );
   }
 
   private openSearchModal(editor: Editor): void {
@@ -79,7 +85,6 @@ export default class SynologyLinkPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
-    // Clear cached connection info when settings change
     this.synologyApi.clearCache();
   }
 }

@@ -345,6 +345,19 @@ export class SynologyApi {
     return `${baseUrl}/webapi/entry.cgi?${params.toString()}`;
   }
 
+  getFolderUrl(filePath: string): string {
+    const url = this.settings().url.replace(/\/+$/, "");
+    if (!url) {
+      throw new Error("NAS URL is not configured.");
+    }
+
+    // Pass the full path — File Station opens the folder if it's a directory,
+    // or the containing folder if it's a file.
+    const launchParam = encodeURIComponent(`openfile=${filePath}`);
+
+    return `${url}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=${launchParam}`;
+  }
+
   async testConnection(): Promise<boolean> {
     this.clearCache();
     await this.authenticate();

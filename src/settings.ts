@@ -7,6 +7,7 @@ export interface SynologyLinkSettings {
   password: string;
   searchFolders: string;
   fileExtensions: string;
+  openFolder: boolean;
 }
 
 export const DEFAULT_SETTINGS: SynologyLinkSettings = {
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: SynologyLinkSettings = {
   password: "",
   searchFolders: "",
   fileExtensions: "",
+  openFolder: false,
 };
 
 export class SynologyLinkSettingTab extends PluginSettingTab {
@@ -97,6 +99,20 @@ export class SynologyLinkSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.fileExtensions)
           .onChange(async (value) => {
             this.plugin.settings.fileExtensions = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Open containing folder")
+      .setDesc(
+        "When clicking a Synology link, open the containing folder in File Station instead of downloading the file directly."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.openFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.openFolder = value;
             await this.plugin.saveSettings();
           })
       );
