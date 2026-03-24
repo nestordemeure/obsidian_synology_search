@@ -10,7 +10,11 @@ Search for files on your Synology NAS and insert links into your notes. Clicking
 - **QuickConnect & direct URL** — supports both connection methods
 - **Context menu & command palette** — right-click "Add Synology link" or use the command palette
 
+Note that the **Universal Search** package must be installed on your Synology NAS (Package Center → Universal Search).
+
 ## Install
+
+### Manual install
 
 1. Copy `main.js` and `manifest.json` into your vault at `.obsidian/plugins/synology-link/`
 2. In Obsidian: Settings > Community plugins > disable Restricted mode > enable "Synology Link"
@@ -20,7 +24,9 @@ Search for files on your Synology NAS and insert links into your notes. Clicking
    - Search folder(s) — comma-separated NAS shared folder paths, e.g. `/Books,/Papers`
 4. Click "Test" to verify the connection
 
-Note that the **Universal Search** package must be installed on your Synology NAS (Package Center → Universal Search).
+### BRAT install
+
+You can also install (and auto update) this plugin by installing the [BRAT Obsidian plugin](https://tfthacker.com/BRAT) then adding `https://github.com/nestordemeure/obsidian_synology_search` to its list of beta plugins.
 
 ## Usage
 
@@ -34,17 +40,32 @@ Note that the **Universal Search** package must be installed on your Synology NA
 npm install
 npm run build          # production build → main.js
 npm run dev            # development build with sourcemaps
+npm run check          # TypeScript typecheck
 ```
 
 ### Deploy to a vault for testing
 
 ```bash
-./deploy.sh /path/to/your/vault
+./local_deploy.sh /path/to/your/vault
 # or run without args to be prompted
-./deploy.sh
+./local_deploy.sh
 ```
 
 Then restart Obsidian or toggle the plugin off/on to reload.
+
+### Release
+
+Create a version bump, commit it, and push a tag that exactly matches the plugin version:
+
+```bash
+npm version patch --no-git-tag-version
+git add package.json manifest.json versions.json
+git commit -m "Release 0.1.1"
+git tag 0.1.1
+git push && git push --tags
+```
+
+GitHub Actions will publish a release with `manifest.json`, `main.js`, and `versions.json`.
 
 ### Project structure
 
