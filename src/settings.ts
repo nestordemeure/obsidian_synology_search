@@ -2,9 +2,7 @@ import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type SynologyLinkPlugin from "./main";
 
 export interface SynologyLinkSettings {
-  connectionType: "quickconnect" | "direct";
-  quickConnectId: string;
-  directUrl: string;
+  url: string;
   username: string;
   password: string;
   searchFolders: string;
@@ -12,12 +10,10 @@ export interface SynologyLinkSettings {
 }
 
 export const DEFAULT_SETTINGS: SynologyLinkSettings = {
-  connectionType: "quickconnect",
-  quickConnectId: "",
-  directUrl: "",
+  url: "",
   username: "",
   password: "",
-  searchFolders: "/volume1/Books",
+  searchFolders: "",
   fileExtensions: "",
 };
 
@@ -34,51 +30,17 @@ export class SynologyLinkSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName("Connection type")
-      .setDesc("How to connect to your Synology NAS")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("quickconnect", "QuickConnect ID")
-          .addOption("direct", "Direct URL")
-          .setValue(this.plugin.settings.connectionType)
-          .onChange(async (value: string) => {
-            this.plugin.settings.connectionType = value as
-              | "quickconnect"
-              | "direct";
+      .setName("NAS URL")
+      .setDesc("URL of your Synology NAS (e.g., https://192.168.1.50:5001 or https://mynas.synology.me:5001)")
+      .addText((text) =>
+        text
+          .setPlaceholder("https://192.168.1.50:5001")
+          .setValue(this.plugin.settings.url)
+          .onChange(async (value) => {
+            this.plugin.settings.url = value;
             await this.plugin.saveSettings();
-            this.display();
           })
       );
-
-    if (this.plugin.settings.connectionType === "quickconnect") {
-      new Setting(containerEl)
-        .setName("QuickConnect ID")
-        .setDesc("Your Synology QuickConnect ID (e.g., mynas)")
-        .addText((text) =>
-          text
-            .setPlaceholder("mynas")
-            .setValue(this.plugin.settings.quickConnectId)
-            .onChange(async (value) => {
-              this.plugin.settings.quickConnectId = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    } else {
-      new Setting(containerEl)
-        .setName("Direct URL")
-        .setDesc(
-          "Direct URL to your NAS (e.g., https://192.168.1.50:5001)"
-        )
-        .addText((text) =>
-          text
-            .setPlaceholder("https://192.168.1.50:5001")
-            .setValue(this.plugin.settings.directUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.directUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    }
 
     new Setting(containerEl)
       .setName("Username")
@@ -112,11 +74,11 @@ export class SynologyLinkSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Search folders")
       .setDesc(
-        "Comma-separated NAS folder paths to search (e.g., /volume1/Books,/volume1/Papers)"
+        "Comma-separated NAS shared folder paths to search (e.g., /Books,/Papers). Use the 'List folders' button to see available paths."
       )
       .addText((text) =>
         text
-          .setPlaceholder("/volume1/Books")
+          .setPlaceholder("/Books")
           .setValue(this.plugin.settings.searchFolders)
           .onChange(async (value) => {
             this.plugin.settings.searchFolders = value;

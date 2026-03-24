@@ -1,4 +1,4 @@
-import { requestUrl, Notice } from "obsidian";
+import { requestUrl } from "obsidian";
 import type { SynologyLinkSettings } from "./settings";
 
 export interface FileResult {
@@ -27,143 +27,131 @@ export class SynologyApi {
       return this.resolvedBaseUrl;
     }
 
-    const s = this.settings();
-
-    if (s.connectionType === "direct") {
-      const url = s.directUrl.replace(/\/+$/, "");
-      if (!url) {
-        throw new Error("Direct URL is not configured.");
-      }
-      this.resolvedBaseUrl = url;
-      return url;
+    const url = this.settings().url.replace(/\/+$/, "");
+    if (!url) {
+      throw new Error("NAS URL is not configured.");
     }
 
-    if (!s.quickConnectId) {
-      throw new Error("QuickConnect ID is not configured.");
+    // If it's a QuickConnect URL, resolve to the actual relay address
+    if (url.includes("quickconnect.to")) {
+      const resolved = await this.resolveQuickConnect(url);
+      this.resolvedBaseUrl = resolved;
+      return resolved;
     }
 
-    const url = await this.resolveQuickConnect(s.quickConnectId);
     this.resolvedBaseUrl = url;
     return url;
   }
 
-  private async resolveQuickConnect(id: string): Promise<string> {
-    const payload = {
-      version: 1,
-      command: "get_server_info",
-      stop_when_error: false,
-      stop_when_success: false,
-      id: "dsm_portal_https",
-      serverID: id,
-      is_gofile: false,
-    };
+  private async resolveQuickConnect(url: string): Promise<string> {
+    // Extract QuickConnect ID from URL like https://mynas.fr1.quickconnect.to
+    const match = url.match(/https?:\/\/([^.]+)\./);
+    if (!match) {
+      throw new Error("Could not parse QuickConnect ID from URL.");
+    }
+    const qcId = match[1];
 
-    let resp;
+    // Step 1: Ask global server
+    let serverInfo = await this.fetchServerInfo(
+      "https://global.quickconnect.to/Serv.php",
+      qcId
+    );
+
+    // If errno=4, follow the regional redirect
+    if (serverInfo.errno === 4 && serverInfo.sites?.length > 0) {
+      const regional = serverInfo.sites[0];
+      serverInfo = await this.fetchServerInfo(
+        `https://${regional}/Serv.php`,
+        qcId
+      );
+    }
+
+    if (serverInfo.errno && serverInfo.errno !== 0) {
+      throw new Error(
+        `QuickConnect resolution failed (error ${serverInfo.errno}). Check your URL.`
+      );
+    }
+
+    const service = serverInfo.service;
+    if (!service) {
+      throw new Error("QuickConnect returned no service info.");
+    }
+
+    // Build candidate URLs: relay first (since pingpong is typically DISCONNECTED
+    // for QuickConnect users), then direct addresses
+    const candidates: string[] = [];
+
+    // Relay (most reliable for QuickConnect)
+    if (service.relay_dn && service.relay_port) {
+      candidates.push(`https://${service.relay_dn}:${service.relay_port}`);
+    }
+    if (service.relay_ip && service.relay_port) {
+      candidates.push(
+        `https://${service.relay_ip}:${service.relay_port}`
+      );
+    }
+
+    // Direct addresses
+    const server = serverInfo.server;
+    if (server) {
+      const port = service.ext_port || service.port || 5001;
+      if (server.ddns && server.ddns !== "NULL") {
+        candidates.push(`https://${server.ddns}:${port}`);
+      }
+      if (server.fqdn && server.fqdn !== "NULL") {
+        candidates.push(`https://${server.fqdn}:${port}`);
+      }
+      if (server.external?.ip && server.external.ip !== "0.0.0.0") {
+        candidates.push(`https://${server.external.ip}:${port}`);
+      }
+    }
+
+    // Try each candidate
+    for (const candidate of candidates) {
+      try {
+        const resp = await requestUrl({
+          url: `${candidate}/webapi/entry.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
+          method: "GET",
+          throw: false,
+        });
+        if (resp.status === 200 && resp.json?.success) {
+          return candidate;
+        }
+      } catch {
+        // Try next
+      }
+    }
+
+    throw new Error(
+      "Could not reach NAS via QuickConnect. Check your URL and NAS connectivity."
+    );
+  }
+
+  private async fetchServerInfo(
+    endpoint: string,
+    qcId: string
+  ): Promise<any> {
     try {
-      resp = await requestUrl({
-        url: "https://global.quickconnect.to/Serv.php",
+      const resp = await requestUrl({
+        url: endpoint,
         method: "POST",
         contentType: "application/json",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          version: 1,
+          command: "get_server_info",
+          stop_when_error: false,
+          stop_when_success: false,
+          id: "dsm_portal_https",
+          serverID: qcId,
+          is_gofile: false,
+        }),
       });
+      return resp.json;
     } catch {
       throw new Error(
         "Failed to contact QuickConnect servers. Check your internet connection."
       );
     }
-
-    const data = resp.json;
-
-    if (data.errno && data.errno !== 0) {
-      throw new Error(
-        `QuickConnect returned error ${data.errno}. Check your QuickConnect ID.`
-      );
-    }
-
-    if (data.errinfo) {
-      throw new Error(
-        `QuickConnect error: ${data.errinfo}. Check your QuickConnect ID.`
-      );
-    }
-
-    const server = data.server;
-    const service = data.service;
-
-    if (!server || !service) {
-      throw new Error(
-        "QuickConnect returned unexpected response. Check your QuickConnect ID."
-      );
-    }
-
-    // Build candidate URLs in priority order: DDNS, FQDN, external IP
-    const candidates: string[] = [];
-    const port = service.ext_port || service.port || 5001;
-
-    if (server.ddns && server.ddns !== "NULL") {
-      candidates.push(`https://${server.ddns}:${port}`);
-    }
-    if (server.fqdn && server.fqdn !== "NULL") {
-      candidates.push(`https://${server.fqdn}:${port}`);
-    }
-    if (server.external?.ip && server.external.ip !== "0.0.0.0") {
-      candidates.push(`https://${server.external.ip}:${port}`);
-    }
-
-    // Also try LAN interfaces with internal port
-    if (server.interface && Array.isArray(server.interface)) {
-      const lanPort = service.port || 5001;
-      for (const iface of server.interface) {
-        if (iface.ip) {
-          candidates.push(`https://${iface.ip}:${lanPort}`);
-        }
-      }
-    }
-
-    // Try each candidate with a pingpong check
-    for (const candidate of candidates) {
-      try {
-        const pingResp = await requestUrl({
-          url: `${candidate}/webman/pingpong.cgi?action=cors&quickconnect=true`,
-          method: "GET",
-          throw: false,
-        });
-        if (pingResp.status === 200 && pingResp.json?.success) {
-          return candidate;
-        }
-      } catch {
-        // Try next candidate
-      }
-    }
-
-    // Fallback: try relay tunnel
-    try {
-      const relayResp = await requestUrl({
-        url: "https://global.quickconnect.to/Serv.php",
-        method: "POST",
-        contentType: "application/json",
-        body: JSON.stringify({
-          version: 1,
-          command: "request_tunnel",
-          stop_when_error: false,
-          stop_when_success: false,
-          id: "dsm_portal_https",
-          serverID: id,
-        }),
-      });
-
-      const relayData = relayResp.json;
-      const relayService = relayData.service;
-      if (relayService?.relay_ip && relayService?.relay_port) {
-        const relayUrl = `https://${relayService.relay_ip}:${relayService.relay_port}`;
-        return relayUrl;
-      }
-    } catch {
-      // Fall through to error
-    }
-
-    throw new Error(
-      "Could not resolve QuickConnect ID to a reachable address. Try using a direct URL instead."
-    );
   }
 
   async authenticate(): Promise<string> {
@@ -270,101 +258,75 @@ export class SynologyApi {
     signal?: AbortSignal
   ): Promise<FileResult[]> {
     if (!query.trim()) return [];
+    if (signal?.aborted) return [];
 
-    // Start a search task for each folder, collect all results
-    const results: FileResult[] = [];
-    const taskIds: string[] = [];
+    // Use Universal Search (SYNO.Finder.FileIndexing.Search) — instant,
+    // keyword-based, case-insensitive, works with multi-word queries.
+    const resp = await this.authenticatedRequest({
+      api: "SYNO.Finder.FileIndexing.Search",
+      version: "1",
+      method: "search",
+      keyword: query,
+      orig_keyword: query,
+      query_serial: "1",
+      indice: "[]",
+      from: "0",
+      size: "50",
+      file_type: "",
+      criteria_list: "[]",
+      search_weight_list: JSON.stringify([
+        { field: "SYNOMDSearchFileName", weight: 1, trailing_wildcard: true },
+      ]),
+      fields: JSON.stringify([
+        "SYNOMDSharePath",
+        "SYNOMDFSName",
+        "SYNOMDFSSize",
+        "SYNOMDIsDir",
+      ]),
+      sorter_field: "relevance",
+      sorter_direction: "asc",
+      sorter_use_nature_sort: "false",
+      sorter_show_directory_first: "true",
+    });
 
-    try {
-      for (const folder of folders) {
-        if (signal?.aborted) return [];
-
-        const startParams: Record<string, string> = {
-          api: "SYNO.FileStation.Search",
-          version: "2",
-          method: "start",
-          folder_path: `"${folder.trim()}"`,
-          pattern: `"*${query}*"`,
-          recursive: "true",
-        };
-
-        if (extensions.length > 0) {
-          startParams.extension = `"${extensions.join(",")}"`;
-        }
-
-        const startResp = await this.authenticatedRequest(startParams);
-        if (!startResp.success) {
-          console.error("Search start failed:", startResp.error);
-          continue;
-        }
-
-        taskIds.push(startResp.data.taskid);
-      }
-
-      // Poll all tasks until finished or timeout
-      const deadline = Date.now() + 10000; // 10 second timeout
-
-      for (const taskId of taskIds) {
-        let finished = false;
-
-        while (!finished && Date.now() < deadline) {
-          if (signal?.aborted) break;
-
-          const listResp = await this.authenticatedRequest({
-            api: "SYNO.FileStation.Search",
-            version: "2",
-            method: "list",
-            taskid: `"${taskId}"`,
-            offset: "0",
-            limit: "50",
-            additional: '["size"]',
-          });
-
-          if (!listResp.success) {
-            break;
-          }
-
-          finished = listResp.data.finished;
-
-          if (listResp.data.files) {
-            for (const file of listResp.data.files) {
-              results.push({
-                path: file.path,
-                name: file.name,
-                size: file.additional?.size ?? 0,
-                isdir: file.isdir,
-              });
-            }
-          }
-
-          if (!finished) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
-        }
-      }
-    } finally {
-      // Clean up: stop all search tasks
-      for (const taskId of taskIds) {
-        try {
-          await this.authenticatedRequest({
-            api: "SYNO.FileStation.Search",
-            version: "2",
-            method: "stop",
-            taskid: `"${taskId}"`,
-          });
-        } catch {
-          // Best effort cleanup
-        }
-      }
+    if (!resp.success) {
+      console.error("Universal Search failed:", resp.error);
+      return [];
     }
 
-    // Deduplicate by path
-    const seen = new Set<string>();
-    return results.filter((r) => {
-      if (seen.has(r.path)) return false;
-      seen.add(r.path);
-      return true;
-    });
+    const hits: FileResult[] = [];
+    const folderPrefixes = folders.map((f) => f.trim());
+
+    for (const hit of resp.data?.hits ?? []) {
+      const sharePath: string = hit.SYNOMDSharePath ?? "";
+      const name: string = hit.SYNOMDFSName ?? "";
+      const isdir = hit.SYNOMDIsDir === "y";
+
+      // Filter to configured search folders
+      if (
+        folderPrefixes.length > 0 &&
+        !folderPrefixes.some((prefix) => sharePath.startsWith(prefix))
+      ) {
+        continue;
+      }
+
+      // Filter by extension if configured
+      if (extensions.length > 0 && !isdir) {
+        const ext = name.split(".").pop()?.toLowerCase() ?? "";
+        if (!extensions.some((e) => e.toLowerCase() === ext)) {
+          continue;
+        }
+      }
+
+      hits.push({
+        path: sharePath,
+        name,
+        size: parseInt(hit.SYNOMDFSSize ?? "0", 10),
+        isdir,
+      });
+    }
+
+    return hits;
   }
 
   async getDownloadUrl(filePath: string): Promise<string> {
