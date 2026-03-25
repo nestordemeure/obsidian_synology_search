@@ -5,8 +5,8 @@ Search for files on your Synology NAS and insert links into your notes. Clicking
 ## Features
 
 - **Search** — instant keyword search via Synology Universal Search (debounced, case-insensitive, multi-word)
-- **Insert links** — inserts `[filename](synology:///path/to/file.pdf)` at cursor
-- **Click to open** — `synology://` links authenticate and open the file in your browser (works in both Reading View and Live Preview)
+- **Insert links** — inserts `[filename](obsidian://synology-open?path=...)` at cursor
+- **Click to open** — links work everywhere: note body, Live Preview, Reading View, and **frontmatter properties**
 - **QuickConnect & direct URL** — supports both connection methods
 - **Context menu & command palette** — right-click "Add Synology link" or use the command palette
 
@@ -75,5 +75,5 @@ src/
 ├── settings.ts        # Settings tab and defaults
 ├── synology-api.ts    # QuickConnect resolution, auth, Universal Search, download URLs
 ├── search-modal.ts    # SuggestModal with debounced NAS search
-└── link-handler.ts    # Click handlers for synology:// links (Reading View + Live Preview)
+└── link-handler.ts    # Click handlers for obsidian://synology-open links (Reading View + Live Preview)
 ```

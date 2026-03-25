@@ -27,9 +27,8 @@ export class SynologyLinkChild extends MarkdownRenderChild {
     const href = link.getAttribute("href");
     if (!href) return;
 
-    const filePath = decodeURIComponent(
-      href.replace(/^synology:\/\//, "")
-    );
+    const filePath = extractSynologyPath(href);
+    if (!filePath) return;
 
     link.addClass("synology-link");
 
@@ -60,7 +59,7 @@ export function buildLivePreviewExtension(
       const pos = view.posAtDOM(target);
       const line = view.state.doc.lineAt(pos);
 
-      const regex = /\[[^\]]*\]\((synology:\/\/[^)]+)\)/g;
+      const regex = /\[[^\]]*\]\((synology:\/\/[^)]+|obsidian:\/\/synology-open[^)]+)\)/g;
       let match;
       while ((match = regex.exec(line.text)) !== null) {
         const matchStart = line.from + match.index;
@@ -70,10 +69,10 @@ export function buildLivePreviewExtension(
           evt.preventDefault();
           evt.stopPropagation();
 
-          const filePath = decodeURIComponent(
-            match[1].replace(/^synology:\/\//, "")
-          );
-          openSynologyLink(api, getSettings, filePath);
+          const filePath = extractSynologyPath(match[1]);
+          if (filePath) {
+            openSynologyLink(api, getSettings, filePath);
+          }
           return true;
         }
       }
@@ -83,7 +82,28 @@ export function buildLivePreviewExtension(
   });
 }
 
-async function openSynologyLink(
+/**
+ * Extract the file path from either synology:// or obsidian://synology-open URLs.
+ */
+function extractSynologyPath(href: string): string | null {
+  if (href.startsWith("synology://")) {
+    return decodeURIComponent(href.replace(/^synology:\/\//, ""));
+  }
+  if (href.startsWith("obsidian://synology-open")) {
+    try {
+      const url = new URL(href);
+      const path = url.searchParams.get("path");
+      return path ? decodeURIComponent(path) : null;
+    } catch {
+      // Fallback: parse query string manually
+      const match = href.match(/[?&]path=([^&]+)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    }
+  }
+  return null;
+}
+
+export async function openSynologyLink(
   api: SynologyApi,
   getSettings: GetSettings,
   filePath: string

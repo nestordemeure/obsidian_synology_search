@@ -121,7 +121,8 @@ export class SynologySearchModal extends SuggestModal<FileResult> {
   onChooseSuggestion(item: FileResult): void {
     const displayText =
       this.selectedText || item.name.replace(/\.[^/.]+$/, "");
-    const link = `[${displayText}](synology://${item.path})`;
+    const encodedPath = encodeURIComponent(item.path);
+    const link = `[${displayText}](obsidian://synology-open?path=${encodedPath})`;
 
     if (this.selectedText) {
       this.editor.replaceSelection(link);

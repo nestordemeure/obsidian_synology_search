@@ -6,7 +6,7 @@ import {
 } from "./settings";
 import { SynologyApi } from "./synology-api";
 import { SynologySearchModal } from "./search-modal";
-import { SynologyLinkChild, buildLivePreviewExtension } from "./link-handler";
+import { SynologyLinkChild, buildLivePreviewExtension, openSynologyLink } from "./link-handler";
 
 export default class SynologyLinkPlugin extends Plugin {
   settings: SynologyLinkSettings = DEFAULT_SETTINGS;
@@ -44,9 +44,21 @@ export default class SynologyLinkPlugin extends Plugin {
       )
     );
 
-    // Reading View: post-processor for synology:// links
+    // Protocol handler for obsidian://synology-open?path=... links
+    this.registerObsidianProtocolHandler("synology-open", (params) => {
+      const filePath = params.path;
+      if (!filePath) {
+        new Notice("Synology link missing path parameter.");
+        return;
+      }
+      openSynologyLink(this.synologyApi, () => this.settings, filePath);
+    });
+
+    // Reading View: post-processor for synology:// and obsidian://synology-open links
     this.registerMarkdownPostProcessor((el, ctx) => {
-      const links = el.querySelectorAll('a[href^="synology://"]');
+      const links = el.querySelectorAll(
+        'a[href^="synology://"], a[href^="obsidian://synology-open"]'
+      );
       links.forEach((link) => {
         const child = new SynologyLinkChild(
           link as HTMLElement,
