@@ -6,7 +6,10 @@ import {
 } from "./settings";
 import { SynologyApi } from "./synology-api";
 import { SynologySearchModal } from "./search-modal";
-import { SynologyLinkChild, buildLivePreviewExtension, openSynologyLink } from "./link-handler";
+import {
+  DownloadOnClickChild,
+  buildLivePreviewExtension,
+} from "./link-handler";
 
 export default class SynologyLinkPlugin extends Plugin {
   settings: SynologyLinkSettings = DEFAULT_SETTINGS;
@@ -44,20 +47,21 @@ export default class SynologyLinkPlugin extends Plugin {
       )
     );
 
-    // Backward compatibility: post-processor for old synology:// links
+    // Reading View: intercept clicks on File Station links for download-on-click
     this.registerMarkdownPostProcessor((el, ctx) => {
-      const links = el.querySelectorAll('a[href^="synology://"]');
+      const links = el.querySelectorAll(
+        'a[href*="launchApp=SYNO.SDS.App.FileStation3.Instance"]'
+      );
       links.forEach((link) => {
-        const child = new SynologyLinkChild(
+        ctx.addChild(new DownloadOnClickChild(
           link as HTMLElement,
           this.synologyApi,
           () => this.settings
-        );
-        ctx.addChild(child);
+        ));
       });
     });
 
-    // Backward compatibility: live preview for old synology:// links
+    // Live Preview: intercept clicks on NAS and legacy links
     this.registerEditorExtension(
       buildLivePreviewExtension(this.synologyApi, () => this.settings)
     );

@@ -1,7 +1,7 @@
 {
   "id": "synology-link",
   "name": "Synology Link",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "minAppVersion": "1.0.0",
   "description": "Search and link to files on your Synology NAS directly from Obsidian.",
   "author": "Nestor Demeure",

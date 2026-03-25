@@ -7,7 +7,7 @@ export interface SynologyLinkSettings {
   password: string;
   searchFolders: string;
   fileExtensions: string;
-  openFolder: boolean;
+  downloadOnClick: boolean;
 }
 
 export const DEFAULT_SETTINGS: SynologyLinkSettings = {
@@ -16,7 +16,7 @@ export const DEFAULT_SETTINGS: SynologyLinkSettings = {
   password: "",
   searchFolders: "",
   fileExtensions: "",
-  openFolder: false,
+  downloadOnClick: false,
 };
 
 export class SynologyLinkSettingTab extends PluginSettingTab {
@@ -104,15 +104,15 @@ export class SynologyLinkSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Open containing folder")
+      .setName("Download on click")
       .setDesc(
-        "When enabled, links open the containing folder in File Station instead of navigating to the file directly."
+        "When enabled, clicking a NAS link in the note body downloads the file directly instead of opening File Station."
       )
       .addToggle((toggle) =>
         toggle
-          .setValue(this.plugin.settings.openFolder)
+          .setValue(this.plugin.settings.downloadOnClick)
           .onChange(async (value) => {
-            this.plugin.settings.openFolder = value;
+            this.plugin.settings.downloadOnClick = value;
             await this.plugin.saveSettings();
           })
       );
