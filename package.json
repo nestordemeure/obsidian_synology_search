@@ -1,6 +1,6 @@
 {
   "name": "obsidian-synology-link",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Search and link to files on your Synology NAS directly from Obsidian.",
   "main": "main.js",
   "scripts": {

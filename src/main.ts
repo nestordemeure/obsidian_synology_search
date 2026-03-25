@@ -44,7 +44,27 @@ export default class SynologyLinkPlugin extends Plugin {
       )
     );
 
-    // Protocol handler for obsidian://synology-open?path=... links
+    // Global click handler: intercepts obsidian://synology-open links anywhere
+    // in the DOM (properties panel, backlinks, etc.) before Obsidian's native
+    // URI handler tries to route them externally.
+    this.registerDomEvent(document, "click", (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement;
+      const anchor = target.closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || !href.startsWith("obsidian://synology-open")) return;
+
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      const match = href.match(/[?&]path=([^&]+)/);
+      if (match) {
+        const filePath = decodeURIComponent(match[1]);
+        openSynologyLink(this.synologyApi, () => this.settings, filePath);
+      }
+    }, true); // capture phase to fire before Obsidian's handler
+
+    // Protocol handler for obsidian://synology-open from external apps
     this.registerObsidianProtocolHandler("synology-open", (params) => {
       const filePath = params.path;
       if (!filePath) {
