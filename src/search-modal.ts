@@ -123,22 +123,14 @@ export class SynologySearchModal extends SuggestModal<FileResult> {
       this.selectedText || item.name.replace(/\.[^/.]+$/, "");
     const nasUrl = this.settings.url.replace(/\/+$/, "");
 
-    let fileUrl: string;
-    if (this.settings.openFolder) {
-      // Open File Station showing the file in its folder
-      const launchParam = encodeURIComponent(`openfile=${item.path}`);
-      fileUrl = `${nasUrl}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=${launchParam}`;
-    } else {
-      // Direct download/open link (browser DSM cookies handle auth)
-      const params = new URLSearchParams({
-        api: "SYNO.FileStation.Download",
-        version: "2",
-        method: "download",
-        path: item.path,
-        mode: "open",
-      });
-      fileUrl = `${nasUrl}/webapi/entry.cgi?${params.toString()}`;
-    }
+    // Build a File Station URL — DSM handles auth via its login flow.
+    // openFolder=false → point to the file (selects it for quick preview/download)
+    // openFolder=true  → point to the containing folder
+    const target = this.settings.openFolder
+      ? item.path.substring(0, item.path.lastIndexOf("/"))
+      : item.path;
+    const launchParam = encodeURIComponent(`openfile=${target}`);
+    const fileUrl = `${nasUrl}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=${launchParam}`;
 
     const link = `[${displayText}](${fileUrl})`;
 
