@@ -1,5 +1,23 @@
-import { requestUrl } from "obsidian";
+import { requestUrl, type RequestUrlParam } from "obsidian";
 import type { SynologyLinkSettings } from "./settings";
+
+/** Timeout in ms for QuickConnect candidate probing. */
+const PROBE_TIMEOUT = 8_000;
+/** Timeout in ms for authentication and API requests. */
+const REQUEST_TIMEOUT = 15_000;
+
+/** Wrapper around requestUrl that rejects if the request takes too long. */
+function timedRequest(
+  params: RequestUrlParam,
+  timeoutMs = REQUEST_TIMEOUT
+) {
+  return Promise.race([
+    requestUrl(params),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+    ),
+  ]);
+}
 
 export interface FileResult {
   path: string;
@@ -106,14 +124,14 @@ export class SynologyApi {
       }
     }
 
-    // Try each candidate
+    // Try each candidate with a short timeout
     for (const candidate of candidates) {
       try {
-        const resp = await requestUrl({
+        const resp = await timedRequest({
           url: `${candidate}/webapi/entry.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
           method: "GET",
           throw: false,
-        });
+        }, PROBE_TIMEOUT);
         if (resp.status === 200 && resp.json?.success) {
           return candidate;
         }
@@ -132,7 +150,7 @@ export class SynologyApi {
     qcId: string
   ): Promise<any> {
     try {
-      const resp = await requestUrl({
+      const resp = await timedRequest({
         url: endpoint,
         method: "POST",
         contentType: "application/json",
@@ -145,7 +163,7 @@ export class SynologyApi {
           serverID: qcId,
           is_gofile: false,
         }),
-      });
+      }, PROBE_TIMEOUT);
       return resp.json;
     } catch {
       throw new Error(
@@ -177,7 +195,7 @@ export class SynologyApi {
 
     let resp;
     try {
-      resp = await requestUrl({
+      resp = await timedRequest({
         url: `${baseUrl}/webapi/entry.cgi`,
         method: "POST",
         contentType: "application/x-www-form-urlencoded",
@@ -225,7 +243,7 @@ export class SynologyApi {
 
     let resp;
     try {
-      resp = await requestUrl({
+      resp = await timedRequest({
         url: `${baseUrl}/webapi/entry.cgi`,
         method: "POST",
         contentType: "application/x-www-form-urlencoded",
