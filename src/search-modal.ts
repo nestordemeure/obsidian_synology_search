@@ -121,8 +121,26 @@ export class SynologySearchModal extends SuggestModal<FileResult> {
   onChooseSuggestion(item: FileResult): void {
     const displayText =
       this.selectedText || item.name.replace(/\.[^/.]+$/, "");
-    const encodedPath = encodeURIComponent(item.path);
-    const link = `[${displayText}](obsidian://synology-open?path=${encodedPath})`;
+    const nasUrl = this.settings.url.replace(/\/+$/, "");
+
+    let fileUrl: string;
+    if (this.settings.openFolder) {
+      // Open File Station showing the file in its folder
+      const launchParam = encodeURIComponent(`openfile=${item.path}`);
+      fileUrl = `${nasUrl}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=${launchParam}`;
+    } else {
+      // Direct download/open link (browser DSM cookies handle auth)
+      const params = new URLSearchParams({
+        api: "SYNO.FileStation.Download",
+        version: "2",
+        method: "download",
+        path: item.path,
+        mode: "open",
+      });
+      fileUrl = `${nasUrl}/webapi/entry.cgi?${params.toString()}`;
+    }
+
+    const link = `[${displayText}](${fileUrl})`;
 
     if (this.selectedText) {
       this.editor.replaceSelection(link);

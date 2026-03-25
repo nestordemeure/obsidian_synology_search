@@ -106,7 +106,7 @@ export class SynologyLinkSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Open containing folder")
       .setDesc(
-        "When clicking a Synology link, open the containing folder in File Station instead of downloading the file directly."
+        "When enabled, links open the containing folder in File Station instead of downloading the file directly."
       )
       .addToggle((toggle) =>
         toggle
